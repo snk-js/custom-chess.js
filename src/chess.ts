@@ -52,6 +52,8 @@ export type Square =
 export const DEFAULT_POSITION =
   'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
 
+export const DEFAULT_STRICT_SAN = false
+
 export type Piece = {
   color: Color
   type: PieceSymbol
@@ -247,7 +249,7 @@ const RANK_8 = 0
 
 const SIDES = {
   [KING]: BITS.KSIDE_CASTLE,
-  [QUEEN]: BITS.QSIDE_CASTLE
+  [QUEEN]: BITS.QSIDE_CASTLE,
 }
 
 const ROOKS = {
@@ -291,128 +293,180 @@ function swapColor(color: Color): Color {
   return color === WHITE ? BLACK : WHITE
 }
 
-export function validateFen(fen: string) {
-  // 1st criterion: 6 space-seperated fields?
+export function validateFen(fen: string, strict?: boolean) {
+  let validations = []
   const tokens = fen.split(/\s+/)
-  if (tokens.length !== 6) {
-    return {
-      ok: false,
-      error: 'Invalid FEN: must contain six space-delimited fields',
+
+  // 1st criterion: 6 space-seperated fields?
+  validations.push(() => {
+    if (tokens.length !== 6) {
+      return {
+        ok: false,
+        error: 'Invalid FEN: must contain six space-delimited fields',
+      }
     }
-  }
+    return { ok: true }
+  })
 
   // 2nd criterion: move number field is a integer value > 0?
-  const moveNumber = parseInt(tokens[5], 10)
-  if (isNaN(moveNumber) || moveNumber <= 0) {
-    return {
-      ok: false,
-      error: 'Invalid FEN: move number must be a positive integer',
+  validations.push(() => {
+    const moveNumber = parseInt(tokens[5], 10)
+    if (isNaN(moveNumber) || moveNumber <= 0) {
+      return {
+        ok: false,
+        error: 'Invalid FEN: move number must be a positive integer',
+      }
     }
-  }
+    return { ok: true }
+  })
 
   // 3rd criterion: half move counter is an integer >= 0?
-  const halfMoves = parseInt(tokens[4], 10)
-  if (isNaN(halfMoves) || halfMoves < 0) {
-    return {
-      ok: false,
-      error:
-        'Invalid FEN: half move counter number must be a non-negative integer',
+  validations.push(() => {
+    const halfMoves = parseInt(tokens[4], 10)
+    if (isNaN(halfMoves) || halfMoves < 0) {
+      return {
+        ok: false,
+        error:
+          'Invalid FEN: half move counter number must be a non-negative integer',
+      }
     }
-  }
+    return { ok: true }
+  })
 
   // 4th criterion: 4th field is a valid e.p.-string?
-  if (!/^(-|[abcdefgh][36])$/.test(tokens[3])) {
-    return { ok: false, error: 'Invalid FEN: en-passant square is invalid' }
-  }
+  validations.push(() => {
+    if (!/^(-|[abcdefgh][36])$/.test(tokens[3])) {
+      return { ok: false, error: 'Invalid FEN: en-passant square is invalid' }
+    }
+    return { ok: true }
+  })
 
   // 5th criterion: 3th field is a valid castle-string?
-  if (/[^kKqQ-]/.test(tokens[2])) {
-    return { ok: false, error: 'Invalid FEN: castling availability is invalid' }
-  }
+  validations.push(() => {
+    if (/[^kKqQ-]/.test(tokens[2])) {
+      return {
+        ok: false,
+        error: 'Invalid FEN: castling availability is invalid',
+      }
+    }
+    return { ok: true }
+  })
 
   // 6th criterion: 2nd field is "w" (white) or "b" (black)?
-  if (!/^(w|b)$/.test(tokens[1])) {
-    return { ok: false, error: 'Invalid FEN: side-to-move is invalid' }
-  }
+  validations.push(() => {
+    if (!/^(w|b)$/.test(tokens[1])) {
+      return { ok: false, error: 'Invalid FEN: side-to-move is invalid' }
+    }
+    return { ok: true, color: tokens[1] as Color }
+  })
 
   // 7th criterion: 1st field contains 8 rows?
   const rows = tokens[0].split('/')
-  if (rows.length !== 8) {
-    return {
-      ok: false,
-      error: "Invalid FEN: piece data does not contain 8 '/'-delimited rows",
-    }
-  }
-
-  // 8th criterion: every row is valid?
-  for (let i = 0; i < rows.length; i++) {
-    // check for right sum of fields AND not two numbers in succession
-    let sumFields = 0
-    let previousWasNumber = false
-
-    for (let k = 0; k < rows[i].length; k++) {
-      if (isDigit(rows[i][k])) {
-        if (previousWasNumber) {
-          return {
-            ok: false,
-            error: 'Invalid FEN: piece data is invalid (consecutive number)',
-          }
-        }
-        sumFields += parseInt(rows[i][k], 10)
-        previousWasNumber = true
-      } else {
-        if (!/^[prnbqkPRNBQK]$/.test(rows[i][k])) {
-          return {
-            ok: false,
-            error: 'Invalid FEN: piece data is invalid (invalid piece)',
-          }
-        }
-        sumFields += 1
-        previousWasNumber = false
-      }
-    }
-    if (sumFields !== 8) {
+  validations.push(() => {
+    if (rows.length !== 8) {
       return {
         ok: false,
-        error: 'Invalid FEN: piece data is invalid (too many squares in rank)',
+        error: "Invalid FEN: piece data does not contain 8 '/'-delimited rows",
       }
     }
-  }
+    return { ok: true, rows }
+  })
+
+  // 8th criterion: every row is valid?
+  validations.push(() => {
+    for (let i = 0; i < rows.length; i++) {
+      // check for right sum of fields AND not two numbers in succession
+      let sumFields = 0
+      let previousWasNumber = false
+
+      for (let k = 0; k < rows[i].length; k++) {
+        if (isDigit(rows[i][k])) {
+          if (previousWasNumber) {
+            return {
+              ok: false,
+              error: 'Invalid FEN: piece data is invalid (consecutive number)',
+            }
+          }
+          sumFields += parseInt(rows[i][k], 10)
+          previousWasNumber = true
+        } else {
+          if (!/^[prnbqkPRNBQK]$/.test(rows[i][k])) {
+            return {
+              ok: false,
+              error: 'Invalid FEN: piece data is invalid (invalid piece)',
+            }
+          }
+          sumFields += 1
+          previousWasNumber = false
+        }
+      }
+      if (sumFields !== 8) {
+        return {
+          ok: false,
+          error:
+            'Invalid FEN: piece data is invalid (too many squares in rank)',
+        }
+      }
+    }
+    return { ok: true }
+  })
 
   // 9th criterion: is en-passant square legal?
-  if (
-    (tokens[3][1] == '3' && tokens[1] == 'w') ||
-    (tokens[3][1] == '6' && tokens[1] == 'b')
-  ) {
-    return { ok: false, error: 'Invalid FEN: illegal en-passant square' }
-  }
+  validations.push(() => {
+    if (
+      (tokens[3][1] == '3' && tokens[1] == 'w') ||
+      (tokens[3][1] == '6' && tokens[1] == 'b')
+    ) {
+      return { ok: false, error: 'Invalid FEN: illegal en-passant square' }
+    }
+    return { ok: true }
+  })
 
   // 10th criterion: does chess position contain exact two kings?
   const kings = [
     { color: 'white', regex: /K/g },
     { color: 'black', regex: /k/g },
   ]
+  validations.push(() => {
+    for (const { color, regex } of kings) {
+      if (!regex.test(tokens[0])) {
+        return { ok: false, error: `Invalid FEN: missing ${color} king` }
+      }
 
-  for (const { color, regex } of kings) {
-    if (!regex.test(tokens[0])) {
-      return { ok: false, error: `Invalid FEN: missing ${color} king` }
+      if ((tokens[0].match(regex) || []).length > 1) {
+        return { ok: false, error: `Invalid FEN: too many ${color} kings` }
+      }
     }
-
-    if ((tokens[0].match(regex) || []).length > 1) {
-      return { ok: false, error: `Invalid FEN: too many ${color} kings` }
-    }
-  }
+    return { ok: true }
+  })
 
   // 11th criterion: are any pawns on the first or eighth rows?
-  if (
-    Array.from(rows[0] + rows[7]).some((char) => char.toUpperCase() === 'P')
-  ) {
-    return {
-      ok: false,
-      error: 'Invalid FEN: some pawns are on the edge rows',
+  validations.push(() => {
+    if (
+      Array.from(rows[0] + rows[7]).some((char) => char.toUpperCase() === 'P')
+    ) {
+      return {
+        ok: false,
+        error: 'Invalid FEN: some pawns are on the edge rows',
+      }
     }
+    return { ok: true }
+  })
+
+  if (!strict) {
+    // if not strict, we don't need to check the remaining criterions
+    const notStrictCriterions = [4, 5, 6, 7, 8, 9, 10, 11]
+    validations = validations.filter(
+      (_, index) => !notStrictCriterions.includes(index + 1)
+    )
   }
 
+  for (let i = 0; i < validations.length; i++) {
+    const result = validations[i]()
+    if (!result.ok) {
+      return result
+    }
+  }
   return { ok: true }
 }
 
@@ -538,9 +592,11 @@ export class Chess {
   private _history: History[] = []
   private _comments: Record<string, string> = {}
   private _castling: Record<Color, number> = { w: 0, b: 0 }
+  private _strict: boolean
 
-  constructor(fen = DEFAULT_POSITION) {
-    this.load(fen)
+  constructor(fen = DEFAULT_POSITION, strict = DEFAULT_STRICT_SAN) {
+    this._strict = strict
+    this.load(fen, false, strict)
   }
 
   clear(keepHeaders = false) {
@@ -563,7 +619,7 @@ export class Chess {
     }
   }
 
-  load(fen: string, keepHeaders = false) {
+  load(fen: string, keepHeaders = false, strict = true) {
     let tokens = fen.split(/\s+/)
 
     // append commonly omitted fen tokens
@@ -574,7 +630,7 @@ export class Chess {
 
     tokens = fen.split(/\s+/)
 
-    const { ok, error } = validateFen(fen)
+    const { ok, error } = validateFen(fen, strict)
     if (!ok) {
       throw new Error(error)
     }
@@ -743,7 +799,7 @@ export class Chess {
   }
 
   reset() {
-    this.load(DEFAULT_POSITION)
+    this.load(DEFAULT_POSITION, false, this._strict)
   }
 
   get(square: Square) {
@@ -799,28 +855,48 @@ export class Chess {
   }
 
   _updateCastlingRights() {
-    const whiteKingInPlace = (this._board[Ox88.e1]?.type === KING && this._board[Ox88.e1]?.color === WHITE)
-    const blackKingInPlace = (this._board[Ox88.e8]?.type === KING && this._board[Ox88.e8]?.color === BLACK)
+    const whiteKingInPlace =
+      this._board[Ox88.e1]?.type === KING &&
+      this._board[Ox88.e1]?.color === WHITE
+    const blackKingInPlace =
+      this._board[Ox88.e8]?.type === KING &&
+      this._board[Ox88.e8]?.color === BLACK
 
-    if (!whiteKingInPlace || this._board[Ox88.a1]?.type !== ROOK || this._board[Ox88.a1]?.color !== WHITE) {
+    if (
+      !whiteKingInPlace ||
+      this._board[Ox88.a1]?.type !== ROOK ||
+      this._board[Ox88.a1]?.color !== WHITE
+    ) {
       this._castling.w &= ~BITS.QSIDE_CASTLE
     }
 
-    if (!whiteKingInPlace || this._board[Ox88.h1]?.type !== ROOK || this._board[Ox88.h1]?.color !== WHITE) {
+    if (
+      !whiteKingInPlace ||
+      this._board[Ox88.h1]?.type !== ROOK ||
+      this._board[Ox88.h1]?.color !== WHITE
+    ) {
       this._castling.w &= ~BITS.KSIDE_CASTLE
     }
 
-    if (!blackKingInPlace || this._board[Ox88.a8]?.type !== ROOK || this._board[Ox88.a8]?.color !== BLACK) {
+    if (
+      !blackKingInPlace ||
+      this._board[Ox88.a8]?.type !== ROOK ||
+      this._board[Ox88.a8]?.color !== BLACK
+    ) {
       this._castling.b &= ~BITS.QSIDE_CASTLE
     }
 
-    if (!blackKingInPlace || this._board[Ox88.h8]?.type !== ROOK || this._board[Ox88.h8]?.color !== BLACK) {
+    if (
+      !blackKingInPlace ||
+      this._board[Ox88.h8]?.type !== ROOK ||
+      this._board[Ox88.h8]?.color !== BLACK
+    ) {
       this._castling.b &= ~BITS.KSIDE_CASTLE
     }
   }
 
   _updateEnPassantSquare() {
-    if(this._epSquare === EMPTY) {
+    if (this._epSquare === EMPTY) {
       return
     }
 
@@ -841,9 +917,9 @@ export class Chess {
     const canCapture = (square: number) =>
       !(square & 0x88) &&
       this._board[square]?.color === this._turn &&
-      this._board[square]?.type === PAWN;
+      this._board[square]?.type === PAWN
 
-    if(!attackers.some(canCapture)) {
+    if (!attackers.some(canCapture)) {
       this._epSquare = EMPTY
     }
   }
@@ -2052,21 +2128,24 @@ export class Chess {
     })
 
     if (!to) {
-      return null;
+      return null
     }
 
     for (let i = 0, len = moves.length; i < len; i++) {
       if (!from) {
-          // if there is no from square, it could be just 'x' missing from a capture
-          if (cleanMove === strippedSan(this._moveToSan(moves[i], moves)).replace('x', '')) {
-            return moves[i];
-          }
-      // hand-compare move properties with the results from our permissive regex
+        // if there is no from square, it could be just 'x' missing from a capture
+        if (
+          cleanMove ===
+          strippedSan(this._moveToSan(moves[i], moves)).replace('x', '')
+        ) {
+          return moves[i]
+        }
+        // hand-compare move properties with the results from our permissive regex
       } else if (
-          (!piece || piece.toLowerCase() == moves[i].piece) &&
-          Ox88[from] == moves[i].from &&
-          Ox88[to] == moves[i].to &&
-          (!promotion || promotion.toLowerCase() == moves[i].promotion)
+        (!piece || piece.toLowerCase() == moves[i].piece) &&
+        Ox88[from] == moves[i].from &&
+        Ox88[to] == moves[i].to &&
+        (!promotion || promotion.toLowerCase() == moves[i].promotion)
       ) {
         return moves[i]
       } else if (overlyDisambiguated) {
@@ -2305,7 +2384,10 @@ export class Chess {
     })
   }
 
-  setCastlingRights(color: Color, rights: Partial<Record<typeof KING | typeof QUEEN, boolean>>) {
+  setCastlingRights(
+    color: Color,
+    rights: Partial<Record<typeof KING | typeof QUEEN, boolean>>
+  ) {
     for (const side of [KING, QUEEN] as const) {
       if (rights[side] !== undefined) {
         if (rights[side]) {
@@ -2319,7 +2401,10 @@ export class Chess {
     this._updateCastlingRights()
     const result = this.getCastlingRights(color)
 
-    return (rights[KING] === undefined || rights[KING] === result[KING]) && (rights[QUEEN] === undefined || rights[QUEEN] === result[QUEEN])
+    return (
+      (rights[KING] === undefined || rights[KING] === result[KING]) &&
+      (rights[QUEEN] === undefined || rights[QUEEN] === result[QUEEN])
+    )
   }
 
   getCastlingRights(color: Color) {
