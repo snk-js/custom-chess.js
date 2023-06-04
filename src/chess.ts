@@ -52,7 +52,7 @@ export type Square =
 export const DEFAULT_POSITION =
   'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
 
-export const DEFAULT_STRICT_SAN = false
+export const DEFAULT_STRICT_FEN = true
 
 export type Piece = {
   color: Color
@@ -594,7 +594,7 @@ export class Chess {
   private _castling: Record<Color, number> = { w: 0, b: 0 }
   private _strict: boolean
 
-  constructor(fen = DEFAULT_POSITION, strict = DEFAULT_STRICT_SAN) {
+  constructor(fen = DEFAULT_POSITION, strict = DEFAULT_STRICT_FEN) {
     this._strict = strict
     this.load(fen, false, strict)
   }
