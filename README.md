@@ -1,5 +1,7 @@
 # chess.js
 
+this project is forked from [Chess.js]("https://github.com/jhlywa/chess.js")
+
 ![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/jhlywa/chess.js/node.js.yml)
 ![npm](https://img.shields.io/npm/v/chess.js?color=blue)
 ![npm](https://img.shields.io/npm/dm/chess.js)
