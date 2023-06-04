@@ -52,7 +52,7 @@ export type Square =
 export const DEFAULT_POSITION =
   'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
 
-export const DEFAULT_STRICT_FEN = true
+export const DEFAULT_STRICT_FEN: number[] = []
 
 export type Piece = {
   color: Color
@@ -293,7 +293,7 @@ function swapColor(color: Color): Color {
   return color === WHITE ? BLACK : WHITE
 }
 
-export function validateFen(fen: string, strict?: boolean) {
+export function validateFen(fen: string, bypass?: number[]) {
   let validations = []
   const tokens = fen.split(/\s+/)
 
@@ -453,12 +453,8 @@ export function validateFen(fen: string, strict?: boolean) {
     return { ok: true }
   })
 
-  if (!strict) {
-    // if not strict, we don't need to check the remaining criterions
-    const notStrictCriterions = [4, 5, 6, 7, 8, 9, 10, 11]
-    validations = validations.filter(
-      (_, index) => !notStrictCriterions.includes(index + 1)
-    )
+  if (bypass?.length) {
+    validations = validations.filter((_, index) => !bypass.includes(index + 1))
   }
 
   for (let i = 0; i < validations.length; i++) {
@@ -581,6 +577,10 @@ function strippedSan(move: string) {
   return move.replace(/=/, '').replace(/[+#]?[?!]*$/, '')
 }
 
+type Config = {
+  bypass: number[]
+}
+
 export class Chess {
   private _board = new Array<Piece>(128)
   private _turn: Color = WHITE
@@ -592,11 +592,15 @@ export class Chess {
   private _history: History[] = []
   private _comments: Record<string, string> = {}
   private _castling: Record<Color, number> = { w: 0, b: 0 }
-  private _strict: boolean
+  private _bypass: number[]
 
-  constructor(fen = DEFAULT_POSITION, strict = DEFAULT_STRICT_FEN) {
-    this._strict = strict
-    this.load(fen, false, strict)
+  constructor(
+    fen = DEFAULT_POSITION,
+    config: Config = { bypass: DEFAULT_STRICT_FEN }
+  ) {
+    const { bypass } = config
+    this._bypass = bypass
+    this.load(fen, false, bypass)
   }
 
   clear(keepHeaders = false) {
@@ -610,6 +614,7 @@ export class Chess {
     this._history = []
     this._comments = {}
     this._header = keepHeaders ? this._header : {}
+    this._bypass = []
     this._updateSetup(this.fen())
   }
 
@@ -619,7 +624,7 @@ export class Chess {
     }
   }
 
-  load(fen: string, keepHeaders = false, strict = true) {
+  load(fen: string, keepHeaders = false, bypass = DEFAULT_STRICT_FEN) {
     let tokens = fen.split(/\s+/)
 
     // append commonly omitted fen tokens
@@ -630,7 +635,7 @@ export class Chess {
 
     tokens = fen.split(/\s+/)
 
-    const { ok, error } = validateFen(fen, strict)
+    const { ok, error } = validateFen(fen, bypass)
     if (!ok) {
       throw new Error(error)
     }
@@ -799,7 +804,7 @@ export class Chess {
   }
 
   reset() {
-    this.load(DEFAULT_POSITION, false, this._strict)
+    this.load(DEFAULT_POSITION, false, this._bypass)
   }
 
   get(square: Square) {
