@@ -526,6 +526,11 @@ test.each([
 
 test('test non-strict fen validation', () => {
   const noKingFen = '8/8/8/8/4R3/8/8/8 w - - 0 1'
+  // chess: Chess(fen, strict) -> Chess
+  // strict is false will by bypass
+  // the 4th to 11th checks in validateFen
+  // most of them are about 8x8 board constraints
+  // king presence, and en passant rule matching
   const chess = new Chess(noKingFen, false)
   expect(chess.fen()).toBe(noKingFen)
 })
