@@ -1,4 +1,5 @@
 import { validateFen } from '../src/chess'
+import { Chess } from '../src/chess'
 
 test.each([
   {
@@ -521,4 +522,10 @@ test.each([
     console.log(result)
   }
   expect(validateFen(fen)).toMatchObject({ ok })
+})
+
+test('test non-strict fen validation', () => {
+  const noKingFen = '8/8/8/8/4R3/8/8/8 w - - 0 1'
+  const chess = new Chess(noKingFen, false)
+  expect(chess.fen()).toBe(noKingFen)
 })
