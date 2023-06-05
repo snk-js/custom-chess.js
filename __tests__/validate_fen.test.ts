@@ -1,5 +1,4 @@
-import { validateFen } from '../src/chess'
-import { Chess } from '../src/chess'
+import { Chess } from '../src/custom-chess'
 
 test.each([
   {
@@ -526,24 +525,21 @@ test.each([
 
 test('non-strict fen validation parameter (FEN with no kings)', () => {
   const noKingFen = '8/8/8/8/4R3/8/8/8 w - - 0 1'
-  // chess: Chess(fen, config: {bypass: number[]}) -> Chess
-  // strict is false will by bypass the 4th to 11th checks in validateFen
-
-  // 1st criterion: 6 space-seperated fields?
-  // 2nd criterion: move number field is a integer value > 0?
-  // 3rd criterion: half move counter is an integer >= 0?
-  // 4th criterion: 4th field is a valid e.p.-string?
-  // 5th criterion: 3th field is a valid castle-string?
-  // 6th criterion: 2nd field is "w" (white) or "b" (black)?
-  // 7th criterion: 1st field contains 8 rows?
-  // 8th criterion: every row is valid?
-  // 9th criterion: is en-passant square legal?
-  // 10th criterion: does chess position contain exact two kings?
-  // 11th criterion: are any pawns on the first or eighth rows?
-
   const chess = new Chess(noKingFen, {
     // if not strict, we don't need to check the remaining criterions
     bypass: [4, 5, 6, 7, 8, 9, 10, 11],
   })
   expect(chess.fen()).toBe(noKingFen)
+})
+
+test('turn changing bypass', () => {
+  const noKingFen = '8/8/8/8/4R3/8/8/8 w - - 0 1'
+  const chess = new Chess(noKingFen, {
+    // if not strict, we don't need to check the remaining criterions
+    bypass: [4, 5, 6, 7, 8, 9, 10, 11],
+    staticTurn: true,
+  })
+
+  chess.move('e4e2')
+  expect(chess.fen()).toBe('8/8/8/8/8/8/4R3/8 w - - 1 1')
 })

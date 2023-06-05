@@ -1,6 +1,6 @@
 {
   "name": "custom-chess.js",
-  "version": "1.0.0-beta.7",
+  "version": "1.0.0-beta.7.3",
   "license": "BSD-2-Clause",
   "main": "dist/cjs/custom-chess.js",
   "module": "dist/esm/custom-chess.js",

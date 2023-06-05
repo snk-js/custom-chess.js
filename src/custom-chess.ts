@@ -578,7 +578,8 @@ function strippedSan(move: string) {
 }
 
 type Config = {
-  bypass: number[]
+  bypass?: number[]
+  staticTurn?: boolean
 }
 
 export class Chess {
@@ -592,14 +593,16 @@ export class Chess {
   private _history: History[] = []
   private _comments: Record<string, string> = {}
   private _castling: Record<Color, number> = { w: 0, b: 0 }
-  private _bypass: number[]
+  private _bypass: number[] = []
+  private _staticTurn? = false
 
   constructor(
     fen = DEFAULT_POSITION,
-    config: Config = { bypass: DEFAULT_STRICT_FEN }
+    config: Config = { bypass: DEFAULT_STRICT_FEN, staticTurn: false }
   ) {
-    const { bypass } = config
-    this._bypass = bypass
+    const { bypass, staticTurn } = config
+    bypass && (this._bypass = bypass)
+    this._staticTurn = staticTurn
     this.load(fen, false, bypass)
   }
 
@@ -614,7 +617,6 @@ export class Chess {
     this._history = []
     this._comments = {}
     this._header = keepHeaders ? this._header : {}
-    this._bypass = []
     this._updateSetup(this.fen())
   }
 
@@ -624,7 +626,11 @@ export class Chess {
     }
   }
 
-  load(fen: string, keepHeaders = false, bypass = DEFAULT_STRICT_FEN) {
+  load(
+    fen: string,
+    keepHeaders = false,
+    bypass = (this._bypass.length && this._bypass) || DEFAULT_STRICT_FEN
+  ) {
     let tokens = fen.split(/\s+/)
 
     // append commonly omitted fen tokens
@@ -1548,7 +1554,7 @@ export class Chess {
       this._moveNumber++
     }
 
-    this._turn = them
+    this._turn = this._staticTurn ? us : them
   }
 
   undo() {
